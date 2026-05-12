@@ -1,58 +1,52 @@
-Smart Material Assistant (SketchUp Plugin)
-這是一款專為 SketchUp 開發的智能材質橋接外掛，旨在將 3D 模型幾何資訊與生成式 AI 流程整合。透過 Ruby API 與 Web 技術（HtmlDialog）的雙向溝通，實現從物理空間數據到 AI 材質渲染的自動化工作流。
+Architech AI Assistant (v3.1)
+Architech AI Assistant 是一款專為 SketchUp 開發的智能材質管理外掛。透過 Ruby API 與 AI 邏輯的結合，本工具能大幅縮減建築師在模型後期處理（材質替換與渲染準備）上的重複勞動，將原本需要數小時的手動點擊過程縮短至秒級自動化處理。
 
 🚀 核心功能
-物理幾何提取：自動辨識並導出選取面的 ID、幾何類型（Face/Edge）與物理面積。
+深度場景掃描 (Deep Scene Scanner)：採用遞歸遍歷演算法 (Recursive Traversal)，能穿透模型中複雜的群組 (Groups) 與組件 (Components) 嵌套，精準統計全域幾何面數據。
 
-AI 材質映射：接收 AI 產生的 JSON 指令，自動處理雲端貼圖下載。
+智能材質映射 (Smart Material Mapping)：支援透過 JSON 指令進行大規模材質替換，並自動為新材質添加時間戳記軌跡，避免命名衝突。
 
-智能比例控制：動態設定貼圖物理尺寸（UV Scaling），確保渲染結果符合現實比例。
+強健的渲染引擎 (Robust Render Engine)：內建防禦性編程邏輯，支援網路貼圖非同步下載、瀏覽器偽裝 (User-Agent Spoofing) 以及失效連結的自動攔截與診斷警告。
 
-健壯的下載引擎：具備 User-Agent 偽裝機制，可繞過常見圖庫伺服器的爬蟲防禦。
+Web-Base 交互介面：使用 HTML/JS 構建輕量化控制面板，實現流暢的跨平台資料交換。
 
-🛠️ 技術決策與工程亮點 (Engineering Judgment)
-在開發這個 MVP (最小可行性產品) 的過程中，我針對多個技術難點進行了權衡與處理：
+🛠️ 技術棧
+後端核心：Ruby (SketchUp API)
 
-1. 數據交換協定 (Schema-First Design)
-為了實現 SketchUp 與 AI 助手之間的解耦，我設計了一套輕量級的 JSON 通訊協定。
+前端介面：HTML5, CSS3, JavaScript (ES6)
 
-優點：確保了外掛核心邏輯與 AI 服務的高度分離，未來可無縫接入 Stable Diffusion 或 Midjourney 的 API。
+資料格式：JSON
 
-2. 防禦性編程 (Defensive Programming)
-在處理網路圖片下載時，開發初期遇到了伺服器回傳 403 Forbidden 或 404 Not Found 導致 SketchUp 核心崩潰（nil:NilClass 錯誤）的問題。
+網路通訊：Ruby Net::HTTP, URI, Tempfile
 
-解決方案：
+📖 使用指南
+載入外掛：將 architech_ai_assistant.rb 貼入 SketchUp Ruby Console 執行。
 
-實作 User-Agent Spoofing：偽裝成瀏覽器請求以確保資源獲取率。
+場景掃描：框選模型物件後，點擊「🔍 掃描框選區域」。系統將生成該區塊的材質分佈 JSON。
 
-狀態攔截機制：在執行 texture.size= 前強制進行 nil? 檢查，確保程式的穩定性（Robustness）。
+AI 風格化：將 JSON 提供給 AI，獲得風格映射表。
 
-3. 同步下載的權衡
-目前版本採用同步下載 (Net::HTTP) 配合暫存檔 (Tempfile) 處理。
+批次換裝：將 AI 回傳的 Mapping JSON 貼入下方輸入框，按下「🎨 執行全區自動換裝」。
 
-工程判斷：雖然同步請求會短暫阻塞 SketchUp 主執行緒，但在處理單一材質時，這能保證操作的原子性（Atomicity），避免材質尚未下載完成就進行賦值的競爭風險。
+🚧 未來優化方向 (Roadmap)
+為了進一步減輕建築師的 Loading 並提升系統穩定度，後續開發將聚焦於以下四個維度：
 
-📦 安裝與啟動
-下載 architech_ai_assistant.rb。
+1. 圖層驅動工作流 (Tag-Driven Mapping)
+目前系統依賴「現有材質名稱」進行分類。未來計畫優化為 「根據圖層 (Tags) 映射」。
 
-在 SketchUp 中開啟 Ruby Console (Window > Ruby Console)。
+場景：建築師只需將素模物件放入 Wall 或 Floor 圖層，外掛即可一鍵完成全屋材質填充，無需事先上色。
 
-將程式碼內容貼入並按下回車。
+2. 本地材質庫集成 (Local Asset Library)
+為了解決網路貼圖穩定性 (404 報錯) 與下載延遲問題。
 
-點擊選單：Extensions > Architech AI助手 > 開啟控制台。
+優化：開發路徑解析模組，支援從本地磁碟直接讀取建築師常用的高品質材質庫，達成 100% 的渲染成功率。
 
-📖 使用手冊 (Workflow)
-選取目標：在 SketchUp 進入編輯模式，點選欲替換材質的面（Face）。
+3. 事後回溯機制 (Transaction Undo)
+優化：將大規模批次變更封裝進單一 start_operation 事務中。
 
-提取資訊：在視窗中點擊 ⚡ 抓取目前選取的面。
+價值：確保使用者可以透過 Ctrl + Z 一鍵復原所有自動化變更，提升操作安全性。
 
-AI 溝通：將產出的 JSON 複製給 AI 助手，並附上您的材質需求（如：「我要清水模風格」）。
+4. 智慧過濾與預覽 (Smart Filtering & Preview)
+優化：自動識別並排除非建築結構材質（如比例人物 Sree_、玻璃、光源）。
 
-自動渲染：將 AI 回傳的 JSON 貼入下方的執行框，點擊 🎨 執行 AI 貼圖下載與渲染。
-
-🗺️ 未來展望 (Roadmap)
-[ ] 批次處理引擎：支援區域選取（Selection Collection），實現整區物件的風格遷移。
-
-[ ] 非同步優化：引入 UI.start_timer 模擬非同步下載，消除介面卡頓。
-
-[ ] 本地快取機制：減少重複材質的網路請求與磁碟 I/O。
+優化：在執行批次換裝前，於介面顯示材質縮圖預覽，提升 UX 體驗。
