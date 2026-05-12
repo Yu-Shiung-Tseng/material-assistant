@@ -1,0 +1,4 @@
+*.skb
+*.bak
+*.log
+.DS_Store
