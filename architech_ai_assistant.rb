@@ -1,16 +1,13 @@
 require 'sketchup.rb'
 require 'json'
-require 'net/http'
-require 'tempfile'
-require 'uri'
 
-module ArchitechAIAssistant
+module ArchitechAIAssistant_v6
   @dialog = nil
 
   def self.open_assistant
     @dialog = UI::HtmlDialog.new({
-      :dialog_title => "Architech AI - 智能空間管理器 v3.1",
-      :width => 500, :height => 750,
+      :dialog_title => "Architech AI - 智能分類引擎 v6.0",
+      :width => 500, :height => 800,
       :style => UI::HtmlDialog::STYLE_DIALOG
     })
 
@@ -20,32 +17,40 @@ module ArchitechAIAssistant
           <style>
             body { font-family: 'Segoe UI', sans-serif; padding: 15px; background: #f4f4f4; color: #333; }
             .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-            textarea { width: 100%; height: 100px; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #ccc; padding: 8px; box-sizing: border-box; background: #282c34; color: #abb2bf; }
+            textarea { width: 100%; height: 80px; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #ccc; padding: 8px; box-sizing: border-box; background: #282c34; color: #abb2bf; }
             button { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px; transition: 0.2s; }
-            .btn-scan { background: #6f42c1; color: white; }
-            .btn-copy { background: #6c757d; color: white; }
-            .btn-apply { background: #28a745; color: white; margin-top: 5px; }
-            h4 { margin: 0 0 5px 0; color: #444; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+            .btn-magic { background: #8e44ad; color: white; }
+            .btn-scan { background: #007bff; color: white; }
+            .btn-apply { background: #d35400; color: white; margin-top: 5px; }
+            h4 { margin: 0 0 5px 0; color: #444; border-bottom: 2px solid #eee; padding-bottom: 5px; font-size: 14px; }
+            .badge { display: inline-block; background: #ffeaa7; color: #d35400; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-bottom: 10px;}
           </style>
         </head>
         <body>
           <div class="card">
-            <h4>1. 深度掃描 (Scene Scanner)</h4>
-            <button class="btn-scan" onclick="sketchup.scan_selection()">🔍 掃描框選區域</button>
-            <textarea id="out_data" readonly></textarea>
-            <button class="btn-copy" onclick="copyData()">複製給 AI</button>
+            <h4>Step 1: 幾何智能體檢 (Auto-Tagger)</h4>
+            <span class="badge">無須手動圖層！AI 自動辨識牆壁/地板</span>
+            <button class="btn-magic" onclick="sketchup.auto_tag_geometry()">✨ 一鍵智慧幾何分類</button>
           </div>
+          
           <div class="card">
-            <h4>2. 批次風格替換 (Batch Render)</h4>
-            <textarea id="in_data" placeholder='貼上 AI 給的 Mappings JSON...'></textarea>
-            <button class="btn-apply" onclick="applyBatch()">🎨 執行全區自動換裝</button>
+            <h4>Step 2: 掃描分類結果 (Tag Scanner)</h4>
+            <button class="btn-scan" onclick="sketchup.scan_selection()">🔍 掃描框選區塊的圖層</button>
+            <textarea id="out_data" readonly placeholder="分類後的結果將顯示於此..."></textarea>
+            <button class="btn-scan" style="background:#6c757d;" onclick="copyData()">複製清單</button>
+          </div>
+
+          <div class="card">
+            <h4>Step 3: AI 極速分色 (Prep for Render)</h4>
+            <textarea id="in_data" placeholder='貼上 AI 給的 Hex Code JSON...'></textarea>
+            <button class="btn-apply" onclick="applyBatch()">🎨 執行圖層分色</button>
           </div>
           <script>
             window.updateUI = function(data) { document.getElementById('out_data').value = JSON.stringify(data, null, 2); };
             function copyData() { const el = document.getElementById("out_data"); el.select(); document.execCommand("copy"); alert("已複製！"); }
             function applyBatch() { 
               const val = document.getElementById('in_data').value;
-              try { sketchup.process_batch(JSON.parse(val)); } catch(e) { alert("JSON 格式錯誤"); }
+              try { sketchup.process_batch(JSON.parse(val)); } catch(e) { alert("JSON 格式錯誤！"); }
             }
           </script>
         </body>
@@ -53,125 +58,120 @@ module ArchitechAIAssistant
     HTML
 
     @dialog.set_html(html)
-    @dialog.add_action_callback("scan_selection") { |_, _| self.execute_deep_scan }
-    @dialog.add_action_callback("process_batch") { |_, params| self.batch_apply_textures(params) }
+    @dialog.add_action_callback("auto_tag_geometry") { |_, _| self.execute_auto_tagger }
+    @dialog.add_action_callback("scan_selection") { |_, _| self.execute_tag_scan }
+    @dialog.add_action_callback("process_batch") { |_, params| self.batch_apply_solid_colors(params) }
     @dialog.show
   end
 
-  # --- 功能 1：深度掃描 ---
-  def self.execute_deep_scan
-    sel = Sketchup.active_model.selection
-    return UI.messagebox("請先用滑鼠框選模型區域！") if sel.empty?
+  # --- [新增] 功能 0：幾何特徵啟發式自動分類 ---
+  def self.execute_auto_tagger
+    model = Sketchup.active_model
+    sel = model.selection
+    return UI.messagebox("請框選要進行體檢的模型！") if sel.empty?
 
-    Sketchup.set_status_text("🔄 正在深度掃描幾何體...")
-    @all_faces = []
-    self.dig_into_entities(sel)
-    return UI.messagebox("找不到面！") if @all_faces.empty?
+    model.start_operation('AI Auto Tagging', true)
 
-    stats = {}
-    @all_faces.each do |face|
-      mat_name = face.material ? face.material.name : "未上色_Default"
-      stats[mat_name] ||= { count: 0 }
-      stats[mat_name][:count] += 1
-    end
-
-    export_data = {
-      "action": "analyze_scene",
-      "total_faces_found": @all_faces.length,
-      "materials_in_scene": stats.map { |k, v| { "original_material": k, "face_count": v[:count] } }
+    # 確保 AI 專用圖層存在
+    @layers = {
+      wall: model.layers.add("AI_Auto_Wall"),
+      floor: model.layers.add("AI_Auto_Floor"),
+      ceiling: model.layers.add("AI_Auto_Ceiling"),
+      other: model.layers.add("AI_Auto_Misc")
     }
-    @dialog.execute_script("updateUI(\#{export_data.to_json})")
-    Sketchup.set_status_text("✅ 掃描完成！")
+
+    @stats = { wall: 0, floor: 0, ceiling: 0, skipped: 0 }
+    
+    self.recursive_auto_tag(sel)
+    
+    model.commit_operation
+    UI.messagebox("✨ 體檢分類完成！\n辨識出:\n牆壁: #{@stats[:wall]} 面\n地板: #{@stats[:floor]} 面\n天花板/屋頂: #{@stats[:ceiling]} 面\n太小或複雜面已略過: #{@stats[:skipped]} 面")
   end
 
-  def self.dig_into_entities(entities)
+  def self.recursive_auto_tag(entities)
     entities.each do |ent|
       if ent.is_a?(Sketchup::Face)
-        @all_faces << ent
-      elsif ent.is_a?(Sketchup::Group)
-        self.dig_into_entities(ent.entities)
-      elsif ent.is_a?(Sketchup::ComponentInstance)
-        self.dig_into_entities(ent.definition.entities)
-      end
-    end
-  end
-
-  # --- 功能 2：批次下載與替換 ---
-  def self.batch_apply_textures(data)
-    mappings = data['mappings']
-    style_name = data['style_name'] || "新風格" 
-    return UI.messagebox("錯誤：找不到 mappings 陣列") unless mappings
-
-    @all_faces = []
-    self.dig_into_entities(Sketchup.active_model.selection)
-    
-    model = Sketchup.active_model
-    model.start_operation('Batch AI Render', true)
-    
-    failed_downloads = []
-
-    begin
-      mappings.each do |map|
-        target_mat = map['target_material']
-        url = map['texture_url']
-        width = map['width_cm'] || 200
-
-        Sketchup.set_status_text("🔄 下載材質中: \#{target_mat}...")
-        
-        uri = URI.parse(url)
-        temp_file = Tempfile.new(['ai_mat', '.jpg'])
-        temp_file.binmode
-        
-        req = Net::HTTP::Get.new(uri)
-        req['User-Agent'] = 'Mozilla/5.0'
-        
-        Net::HTTP.start(uri.hostname, uri.port, use_ssl: (uri.scheme == 'https')) do |http|
-          resp = http.request(req)
-          temp_file.write(resp.body) if resp.is_a?(Net::HTTPSuccess)
-        end
-        temp_file.close
-
-        new_mat = model.materials.add("AI_\#{target_mat}_\#{Time.now.to_i}")
-        
-        begin
-          new_mat.texture = temp_file.path
-        rescue StandardError
-          # 捕捉無效圖片格式的錯誤
-        end
-
-        if new_mat.texture.nil?
-          failed_downloads << target_mat
-          temp_file.unlink
+        # 過濾太小的面 (SketchUp 預設單位為平方英吋，100 sq inch 約 0.06 平方公尺)
+        if ent.area < 100
+          @stats[:skipped] += 1
           next
         end
 
-        new_mat.texture.size = width.cm 
-
-        @all_faces.each do |face|
-          current_mat = face.material ? face.material.name : "未上色_Default"
-          if current_mat == target_mat
-            face.material = new_mat
-          end
+        nz = ent.normal.z
+        if nz.abs < 0.15 # 牆面 (Z向量接近0)
+          ent.layer = @layers[:wall]
+          @stats[:wall] += 1
+        elsif nz > 0.85 # 地板 (Z向量朝上)
+          ent.layer = @layers[:floor]
+          @stats[:floor] += 1
+        elsif nz < -0.85 # 天花板/屋頂 (Z向量朝下)
+          ent.layer = @layers[:ceiling]
+          @stats[:ceiling] += 1
+        else
+          ent.layer = @layers[:other] # 斜屋頂或複雜幾何
         end
-        
-        temp_file.unlink
+      elsif ent.is_a?(Sketchup::Group)
+        self.recursive_auto_tag(ent.entities)
+      elsif ent.is_a?(Sketchup::ComponentInstance)
+        self.recursive_auto_tag(ent.definition.entities)
       end
-      
-      model.commit_operation
+    end
+  end
 
-      final_message = "✅ \#{style_name}，變裝完成！"
-      if failed_downloads.any?
-        final_message += "\n\n⚠️ 警告：以下材質因網路或圖片失效下載失敗，已跳過：\n\#{failed_downloads.join(', ')}"
+  # --- 功能 1：具備繼承能力的圖層掃描 ---
+  def self.execute_tag_scan
+    sel = Sketchup.active_model.selection
+    return UI.messagebox("請先用滑鼠框選模型！") if sel.empty?
+    @tag_stats = {}; @total_faces = 0
+    self.dig_and_scan_tags(sel, "Untagged")
+    export_data = { "action": "analyze_scene_by_tags", "total_faces_found": @total_faces, "tags_in_scene": @tag_stats.map { |k, v| { "tag_name": k, "face_count": v } } }
+    @dialog.execute_script("updateUI(#{export_data.to_json})")
+  end
+
+  def self.dig_and_scan_tags(entities, parent_layer_name)
+    entities.each do |ent|
+      effective_layer = (ent.layer.name == "Layer0" || ent.layer.name == "Untagged") ? parent_layer_name : ent.layer.name
+      if ent.is_a?(Sketchup::Face)
+        @total_faces += 1; @tag_stats[effective_layer] ||= 0; @tag_stats[effective_layer] += 1
+      elsif ent.is_a?(Sketchup::Group)
+        self.dig_and_scan_tags(ent.entities, effective_layer)
+      elsif ent.is_a?(Sketchup::ComponentInstance)
+        self.dig_and_scan_tags(ent.definition.entities, effective_layer)
       end
+    end
+  end
 
-      UI.messagebox(final_message)
-      Sketchup.set_status_text("✅ 批次渲染結束")
-      
-    rescue => e
-      model.abort_operation
-      UI.messagebox("❌ 發生錯誤：\#{e.message}")
+  # --- 功能 2：極速離線純色替換 ---
+  def self.batch_apply_solid_colors(data)
+    mappings = data['mappings']
+    return UI.messagebox("錯誤：找不到 mappings") unless mappings
+    sel = Sketchup.active_model.selection
+    model = Sketchup.active_model
+    model.start_operation('AI Fast Color Prep', true) 
+    tag_to_material_hash = {}
+
+    mappings.each do |map|
+      new_mat = model.materials.add("AI_#{map['target_tag']}_#{Time.now.to_i}")
+      new_mat.color = Sketchup::Color.new(map['hex_color'] || "#CCCCCC")
+      tag_to_material_hash[map['target_tag']] = new_mat
+    end
+    self.apply_materials_to_tags(sel, "Untagged", tag_to_material_hash)
+    model.commit_operation
+    UI.messagebox("⚡ 分色完成！可按 Ctrl+Z 復原。")
+  end
+
+  def self.apply_materials_to_tags(entities, parent_layer_name, tag_hash)
+    entities.each do |ent|
+      effective_layer = (ent.layer.name == "Layer0" || ent.layer.name == "Untagged") ? parent_layer_name : ent.layer.name
+      if ent.is_a?(Sketchup::Face)
+        ent.material = tag_hash[effective_layer] if tag_hash[effective_layer]
+      elsif ent.is_a?(Sketchup::Group)
+        self.apply_materials_to_tags(ent.entities, effective_layer, tag_hash)
+      elsif ent.is_a?(Sketchup::ComponentInstance)
+        self.apply_materials_to_tags(ent.definition.entities, effective_layer, tag_hash)
+      end
     end
   end
 end
 
-ArchitechAIAssistant.open_assistant
+ArchitechAIAssistant_v6.open_assistant
