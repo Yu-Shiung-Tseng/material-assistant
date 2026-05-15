@@ -1,52 +1,54 @@
-Architech AI Assistant (v3.1)
-Architech AI Assistant 是一款專為 SketchUp 開發的智能材質管理外掛。透過 Ruby API 與 AI 邏輯的結合，本工具能大幅縮減建築師在模型後期處理（材質替換與渲染準備）上的重複勞動，將原本需要數小時的手動點擊過程縮短至秒級自動化處理。
+AI Assistant (v6.0) - Auto-Tagger Edition
+Architech AI Assistant 是一款專為 SketchUp 開發的 BIM 智能化材質與圖層管理外掛。
+從 v6.0 版本開始，系統不再只是被動地依賴使用者的建模習慣，而是具備了「幾何特徵啟發式辨識 (Heuristic Geometry Recognition)」的能力。透過底層的數學向量分析，系統能自動診斷並整理雜亂的素模，將原本繁瑣的渲染前置作業（分色、上材質）縮短至毫秒級，達成 100% 離線穩定運作。
 
-🚀 核心功能
-深度場景掃描 (Deep Scene Scanner)：採用遞歸遍歷演算法 (Recursive Traversal)，能穿透模型中複雜的群組 (Groups) 與組件 (Components) 嵌套，精準統計全域幾何面數據。
+🚀 核心亮點 (Core Features)
+1. 智慧體檢與自動分類 (Auto-Tagger Engine)
+打破「依賴使用者良好習慣」的限制。針對所有放置在 Untagged（未標記）圖層的雜亂模型，系統會透過掃描每個面的法向量 (Normal Vector) 進行特徵辨識：
 
-智能材質映射 (Smart Material Mapping)：支援透過 JSON 指令進行大規模材質替換，並自動為新材質添加時間戳記軌跡，避免命名衝突。
+牆壁 (Wall)：自動歸類 Z 軸分量趨近於 0 的垂直面。
 
-強健的渲染引擎 (Robust Render Engine)：內建防禦性編程邏輯，支援網路貼圖非同步下載、瀏覽器偽裝 (User-Agent Spoofing) 以及失效連結的自動攔截與診斷警告。
+地板/屋頂 (Floor/Ceiling)：自動歸類 Z 軸分量大於 0.85 或小於 -0.85 的水平面。
 
-Web-Base 交互介面：使用 HTML/JS 構建輕量化控制面板，實現流暢的跨平台資料交換。
+雜項過濾：自動略過面積過小（預設 < 100 sq inch）的瑣碎幾何體，確保 AI 分類的純淨度。
 
-🛠️ 技術棧
+2. 極速離線純色引擎 (Solid-Color Prep Engine)
+徹底拔除對外部網路貼圖 (URL) 的依賴。AI 現在只需回傳 HEX 色碼，系統便會瞬間在 SketchUp 內建材質庫產生對應的純色色塊並套用，作為後端渲染軟體 (如 Enscape, V-Ray, Lumion) 的辨識標籤。
+
+100% 穩定度：沒有 404 報錯、沒有下載延遲。
+
+毫秒級效能：即使處理百萬個面也極致流暢。
+
+3. 全域事務管理 (Transaction Undo)
+支援 Ctrl + Z 一鍵復原。所有大規模的圖層分類與材質替換，皆封裝於單一的 start_operation 事務中，確保使用者能無壓力地探索各種分色方案。
+
+🛠️ 技術棧與架構
 後端核心：Ruby (SketchUp API)
 
-前端介面：HTML5, CSS3, JavaScript (ES6)
+演算法：深度優先搜尋 (DFS 遞歸掃描)、3D 向量數學 (Vector Math)
 
-資料格式：JSON
+前端介面：HTML5, CSS3, JavaScript (UI::HtmlDialog)
 
-網路通訊：Ruby Net::HTTP, URI, Tempfile
+通訊協定：JSON (Action Callbacks)
 
-📖 使用指南
-載入外掛：將 architech_ai_assistant.rb 貼入 SketchUp Ruby Console 執行。
+📖 標準工作流 (The BIM Workflow)
+體檢與分類：框選雜亂的素模，點擊 「✨ 一鍵智慧幾何分類」，讓 Ruby 幫你把牆壁和地板貼好隱形標籤 (AI_Auto_Wall, AI_Auto_Floor)。
 
-場景掃描：框選模型物件後，點擊「🔍 掃描框選區域」。系統將生成該區塊的材質分佈 JSON。
+掃描結構：點擊 「🔍 掃描框選區塊的圖層」，獲取整理後的圖層清單 JSON。
 
-AI 風格化：將 JSON 提供給 AI，獲得風格映射表。
+AI 賦能：將清單交給 AI（例如 ChatGPT/Gemini），用語意描述你想要的風格（如：日式清水模、工業風）。
 
-批次換裝：將 AI 回傳的 Mapping JSON 貼入下方輸入框，按下「🎨 執行全區自動換裝」。
+極速分色：將 AI 回傳的 Hex Code JSON 貼入系統，按下 「🎨 執行圖層分色」，瞬間完成渲染前置作業。
 
-🚧 未來優化方向 (Roadmap)
-為了進一步減輕建築師的 Loading 並提升系統穩定度，後續開發將聚焦於以下四個維度：
+📂 版本演進軌跡 (Evolution Roadmap)
+v1.0：打通 Ruby 與 HTML 雙向通訊，實作基礎材質抓取。
 
-1. 圖層驅動工作流 (Tag-Driven Mapping)
-目前系統依賴「現有材質名稱」進行分類。未來計畫優化為 「根據圖層 (Tags) 映射」。
+v2.0:從單一物件變更圖層，轉成判斷使用者框選的內容批量變更圖層。
 
-場景：建築師只需將素模物件放入 Wall 或 Floor 圖層，外掛即可一鍵完成全屋材質填充，無需事先上色。
+v3.1：實作遞歸掃描處理 39 萬面髒數據，並加入網路下載的容錯機制。
 
-2. 本地材質庫集成 (Local Asset Library)
-為了解決網路貼圖穩定性 (404 報錯) 與下載延遲問題。
+v4.0：從「材質映射」轉向「圖層驅動 (Tag-Driven)」，貼近 BIM 標準工作流。
 
-優化：開發路徑解析模組，支援從本地磁碟直接讀取建築師常用的高品質材質庫，達成 100% 的渲染成功率。
+v5.0：移除網路圖片依賴，改用 Hex 色碼，達成極速離線渲染預備。
 
-3. 事後回溯機制 (Transaction Undo)
-優化：將大規模批次變更封裝進單一 start_operation 事務中。
-
-價值：確保使用者可以透過 Ctrl + Z 一鍵復原所有自動化變更，提升操作安全性。
-
-4. 智慧過濾與預覽 (Smart Filtering & Preview)
-優化：自動識別並排除非建築結構材質（如比例人物 Sree_、玻璃、光源）。
-
-優化：在執行批次換裝前，於介面顯示材質縮圖預覽，提升 UX 體驗。
+v6.0：導入幾何法向量辨識，實作 Auto-Tagger 自動分類器，解決「使用者未分類圖層」的痛點。
